@@ -18,6 +18,12 @@ from ballsdex.core.models import BlacklistedGuild, BlacklistedID, Special, Ball,
 from ballsdex.core.commands import Core
 from ballsdex.settings import settings
 
+import sqlite3
+from colorama import Fore, Style
+import time, datetime
+
+bot = commands.Bot(command_prefix=".", intents=discord.Intents.all())
+
 log = logging.getLogger("ballsdex.core.bot")
 
 PACKAGES = ["config", "players", "countryballs", "info", "admin", "trade"]
@@ -26,6 +32,186 @@ PACKAGES = ["config", "players", "countryballs", "info", "admin", "trade"]
 def owner_check(ctx: commands.Context[BallsDexBot]):
     return ctx.bot.is_owner(ctx.author)
 
+connection = sqlite3.connect('vouches.db')
+cursor = connection.cursor()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS vouches (
+        user_id INTEGER PRIMARY KEY,
+        vouch_count INTEGER DEFAULT 0
+    )
+''')
+connection.commit()
+
+@bot.event
+async def on_ready():
+    print(Fore.RED + f"{bot.user}" + Fore.BLUE + " is here to the rescue!")
+    print(Style.RESET_ALL)
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="The Spooderman Movie Trailer"))
+
+start_time = time.time()
+
+@bot.command()
+async def help(ctx, embed_choice):
+    embed = discord.Embed(title = "Help", description = "This is the first page of commands that the Spooder Bot offers", color = discord.Color.red())
+    embed.add_field(name = "Help command - \'help\'", value = "This command will list the commands of this bot. The prefix is \'`.`\'.")
+    embed.add_field(name = "Bot Info command - \'botinfo\'", value = "This command tells you lots of information about this bot, including the prefix.", inline = False)
+    embed.add_field(name = "AFK command - \'afk\'", value = "This command lets you go AFK, and when someone pings you, they will be told you're AFK.", inline = False)
+    embed.add_field(name = "Vouch command - \'vouch\'", value = "This command lets you add a vouch to any user (except yourself).")
+    embed.add_field(name = "Vouches command - \'vouches\'", value = "This command shows you how many vouches a user has.", inline = False)
+    embed.set_author(name = "Spooder Bot#6273", icon_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQVfeZlEOZKeGRgafZ3u5HA-movjZayxoPCw&usqp=CAU")
+    embed.set_footer(text = "Spooder Bot help | Spooder Bot#6273", icon_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQVfeZlEOZKeGRgafZ3u5HA-movjZayxoPCw&usqp=CAU")
+
+    embed2 = discord.Embed(title = "Help", description = "This is the second page of commands that the Spooder Bot offers", color = discord.Color.red())
+    embed2.add_field(name = "Add vouches command - \'addvouches\'", value = "This command lets you add vouches to a user.", inline = False)
+    embed2.add_field(name = "Delete vouches command - \'delvouches\'", value = "This command will let you remove vouches from a user.", inline = False)
+    embed2.add_field(name = "Countryvia command - \'countryvia\'", value = "This command will start a round of countryvia, where you have to guess the country based on the flag.", inline = False)
+    embed2.set_author(name = "Spooder Bot#6273", icon_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQVfeZlEOZKeGRgafZ3u5HA-movjZayxoPCw&usqp=CAU")
+    embed2.set_footer(text = "Spooder Bot help | Spooder Bot#6273", icon_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQVfeZlEOZKeGRgafZ3u5HA-movjZayxoPCw&usqp=CAU")
+
+    if embed_choice == "1":
+        await ctx.send(embed = embed)
+    elif embed_choice == "2":
+        await ctx.send(embed = embed2)
+    else:
+        await ctx.send("The page you have chosen doesn't exist. Please choose a different page.")
+
+@bot.command()
+async def botinfo(ctx):
+    current_time = time.time()
+    difference = int(round(current_time - on_ready()))
+    embed = discord.Embed(title = "Spooder Bot information", description = "This is all the information about the Spooder Bot", color = discord.Color.red())
+    embed.add_field(name = "Developers", value = "goofy ahh spiderman#0001 and Darghano#3333", inline = False)
+    embed.add_field(name = "Language", value = "Python", inline = False)
+    embed.add_field(name = "Prefix", value = ".", inline = False)
+    embed.add_field(name = "Guilds", value = len(bot.guilds), inline = False)
+    embed.add_field(name = "Members", value = ctx.guild.member_count, inline = False)
+    embed.add_field(name = "Ping", value = f"{bot.latency}ms", inline = False)
+    embed.add_field(name = "Uptime", value = str(datetime.timedelta(seconds = difference)), inline = False)
+    embed.set_author(name = "Spooder Bot#6273", icon_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQVfeZlEOZKeGRgafZ3u5HA-movjZayxoPCw&usqp=CAU")
+    embed.set_footer(text = "Spooder Bot info | Spooder Bot#6273", icon_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQVfeZlEOZKeGRgafZ3u5HA-movjZayxoPCw&usqp=CAU")
+    await ctx.send(embed = embed)
+
+@bot.listen()
+async def on_message(message):
+    if message.author == bot.user:
+        return
+    for user in message.mentions:
+        if user.id in afkDict:
+            await message.channel.send(f"**{str(user)}** is currently AFK: {afkDict[message.author.id].get('reason')}")
+
+afkDict = {}
+
+@bot.command()
+async def afk(ctx, *, reason):
+    afkDict[ctx.author.id] = {"reason": reason, "start_time": datetime.datetime.now()}
+    await ctx.send("You are now AFK: " + reason)
+    start_time = datetime.datetime.now()
+    await bot.wait_for("message")
+    await ctx.send(f"Welcome back {ctx.author.mention}, you've been away since {discord.utils.format_dt(start_time, style = 'R')}.")
+
+@bot.command()
+async def vouch(ctx, member: discord.Member):
+    cursor.execute('SELECT vouch_count FROM vouches WHERE user_id = ?', (member.id,))
+    result = cursor.fetchone()
+    
+    if result:
+        vouch_count = result[0]
+    else:
+        cursor.execute('INSERT INTO vouches (user_id) VALUES (?)', (member.id,))
+        vouch_count = 0
+    
+    vouch_count += 1
+    cursor.execute('UPDATE vouches SET vouch_count = ? WHERE user_id = ?', (vouch_count, member.id))
+    connection.commit()
+    embed = discord.Embed(description = f"{member.mention}, you have just been vouched by {ctx.author.mention}!", color = discord.Color.green())
+    await ctx.send(member.mention, embed = embed)
+
+@bot.command()
+async def vouches(ctx, member: discord.Member = None):
+    if member is None:
+        member = ctx.author
+    
+    if member == ctx.author:
+        await ctx.send("You cant vouch yourself bozo ☠️")
+        return
+
+    cursor.execute('SELECT vouch_count FROM vouches WHERE user_id = ?', (member.id,))
+    result = cursor.fetchone()
+
+    if result:
+        vouch_count = result[0]
+        if vouch_count == 1:
+            await ctx.send(f"{member.mention} has {vouch_count} vouch.")
+        await ctx.send(f'{member.mention} has {vouch_count} vouches.')
+    else:
+        await ctx.send(f'{member.mention} has no vouches.')
+
+# make so that only mods or smth can use
+@bot.command()
+async def addvouches(ctx, member: discord.Member, amount: int):
+    cursor.execute('SELECT vouch_count FROM vouches WHERE user_id = ?', (member.id,))
+    result = cursor.fetchone()
+
+    if result:
+        current_count = result[0]
+        new_count = current_count + amount
+        cursor.execute('UPDATE vouches SET vouch_count = ? WHERE user_id = ?', (new_count, member.id))
+        connection.commit()
+        await ctx.send(f'Added {amount} vouches to {member.mention}. New vouch count: {new_count}.')
+    else:
+        cursor.execute('INSERT INTO vouches (user_id, vouch_count) VALUES (?, ?)', (member.id, amount))
+        connection.commit()
+        await ctx.send(f'Added {amount} vouches to {member.mention}. New vouch count: {new_count}.')
+
+# make so that only mods or smth can use
+@bot.command()
+async def delvouches(ctx, member: discord.Member, amount: int):
+    cursor.execute('SELECT vouch_count FROM vouches WHERE user_id = ?', (member.id,))
+    result = cursor.fetchone()
+
+    if result:
+        current_count = result[0]
+        new_count = current_count - amount
+        if new_count < 0:
+            new_count = 0
+        cursor.execute('UPDATE vouches SET vouch_count = ? WHERE user_id = ?', (new_count, member.id))
+        connection.commit()
+        await ctx.send(f'Deleted {amount} vouches from {member.mention}. New vouch count: {new_count}.')
+    else:
+        await ctx.send(f'{member.mention} does not have any vouches.')
+
+@bot.command()
+async def clear(ctx, amount: int):
+    """Clears a specified number of messages in a channel."""
+    # Check if the user has the required permissions
+    if not ctx.message.author.guild_permissions.manage_messages:
+        await ctx.send("You don't have the required permissions to manage messages.")
+        return
+
+    # Delete the specified number of messages
+    await ctx.message.delete()
+    deleted = await ctx.channel.purge(limit=amount)
+
+    # Send a response with the number of messages cleared
+    response = f"Cleared {len(deleted)} messages."
+    await ctx.send(response)
+
+@bot.command()
+async def vouchleaderboard(ctx):
+    # Fetch the top 10 vouches from the database
+    cursor.execute("SELECT user_id, vouch_count FROM vouches ORDER BY vouch_count DESC LIMIT 10")
+    results = cursor.fetchall()
+
+    # Create an embed to display the leaderboard
+    embed = discord.Embed(title="Vouch Leaderboard", color=discord.Color.red())
+
+    # Populate the embed with leaderboard data
+    for i, (user_id, vouches) in enumerate(results, start=1):
+        user = ctx.guild.get_member(user_id)
+        username = user.name if user else f"Unknown User ({user_id})"
+        embed.add_field(name=f"`#{i}` - {username}", value=f"Vouches: {vouches}", inline=False)
+
+    await ctx.send(embed=embed)
 
 class CommandTree(app_commands.CommandTree):
     async def interaction_check(self, interaction: discord.Interaction, /) -> bool:
